@@ -18,6 +18,15 @@ class ChartWidget(QWidget):
         self.current_data = None
         self.current_stats = None
         self.animation = None
+
+        # Interactive features
+        self.path_lines = []  # Store references to all path lines
+        self.highlighted_line = None
+        self.hover_dot = None
+        self.tooltip_annotation = None
+        self.last_hover_time = 0
+        self.hover_threshold = 0.03  # Time threshold for hover updates (30 FPS)
+
         self.setup_ui()
         self.setup_chart()
 
@@ -52,7 +61,9 @@ class ChartWidget(QWidget):
         # Enable interactive navigation
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
         self.canvas.mpl_connect('button_press_event', self.on_button_press)
-        self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
+        self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move_and_hover)
+        self.canvas.mpl_connect('axes_enter_event', self.on_axes_enter)
+        self.canvas.mpl_connect('axes_leave_event', self.on_axes_leave)
 
         # Initial placeholder
         self.ax.text(0.5, 0.5, 'Run simulation to see price path chart',
@@ -69,6 +80,9 @@ class ChartWidget(QWidget):
         """Update the chart with new simulation data."""
         self.current_data = (time_grid, price_paths)
         self.current_stats = stats
+
+        # Clear any existing interactive elements
+        self.clear_highlight()
 
         # Clear previous plot
         self.ax.clear()
@@ -113,6 +127,9 @@ class ChartWidget(QWidget):
         n_paths = len(price_paths)
         S0 = price_paths[0, 0]  # Initial price
 
+        # Clear previous path lines
+        self.path_lines = []
+
         # Color paths based on final performance
         final_prices = price_paths[:, -1]
         final_returns = (final_prices / S0 - 1)
@@ -131,8 +148,17 @@ class ChartWidget(QWidget):
         alpha = max(0.1, min(0.8, 200 / n_paths))  # Adaptive alpha based on number of paths
 
         for i, (path, color) in enumerate(zip(price_paths, colors)):
-            self.ax.plot(time_grid, path, color=color, alpha=alpha,
-                        linewidth=CHART_CONFIG['line_width'])
+            line = self.ax.plot(time_grid, path, color=color, alpha=alpha,
+                               linewidth=CHART_CONFIG['line_width'],
+                               picker=True, pickradius=5)[0]  # Enable picking
+
+            # Store line reference with metadata
+            line.path_index = i
+            line.path_data = path
+            line.original_color = color
+            line.original_alpha = alpha
+            line.original_linewidth = CHART_CONFIG['line_width']
+            self.path_lines.append(line)
 
     def plot_percentiles(self, time_grid, stats):
         """Plot percentile lines."""
@@ -285,12 +311,12 @@ class ChartWidget(QWidget):
             return
         self.press_data = (event.xdata, event.ydata)
 
-    def on_mouse_move(self, event):
-        """Handle mouse movement for panning and tooltips."""
+    def on_mouse_move_and_hover(self, event):
+        """Handle mouse movement for both panning and hover interactions."""
         if event.inaxes != self.ax:
             return
 
-        # Panning with left mouse button
+        # Handle panning with left mouse button
         if event.button == 1 and hasattr(self, 'press_data') and self.press_data:
             x_press, y_press = self.press_data
             if x_press is not None and y_press is not None:
@@ -303,6 +329,205 @@ class ChartWidget(QWidget):
                 self.ax.set_xlim(xlim[0] - dx, xlim[1] - dx)
                 self.ax.set_ylim(ylim[0] - dy, ylim[1] - dy)
                 self.canvas.draw()
+        else:
+            # Handle hover interactions when not panning
+            self.on_hover(event)
+
+    def on_hover(self, event):
+        """Handle mouse hover over the chart for interactive features."""
+        if event.inaxes != self.ax or not self.path_lines:
+            return
+
+        # Throttle updates for performance
+        import time
+        current_time = time.time()
+        if current_time - self.last_hover_time < self.hover_threshold:
+            return
+        self.last_hover_time = current_time
+
+        # Find closest line to mouse cursor
+        closest_line = None
+        min_distance = float('inf')
+
+        mouse_x, mouse_y = event.xdata, event.ydata
+        if mouse_x is None or mouse_y is None:
+            return
+
+        for line in self.path_lines:
+            # Get line data
+            xdata, ydata = line.get_data()
+
+            # Find closest point on this line
+            distances = ((xdata - mouse_x) ** 2 + (ydata - mouse_y) ** 2) ** 0.5
+            min_dist_on_line = np.min(distances)
+
+            if min_dist_on_line < min_distance:
+                min_distance = min_dist_on_line
+                closest_line = line
+
+        # Only highlight if mouse is close enough to a line
+        hover_threshold = 0.05 * (self.ax.get_ylim()[1] - self.ax.get_ylim()[0])
+        if min_distance < hover_threshold:
+            self.highlight_path(closest_line, mouse_x, mouse_y)
+        else:
+            self.clear_highlight()
+
+    def on_axes_enter(self, event):
+        """Change cursor when entering chart area."""
+        from PySide6.QtCore import Qt
+        self.canvas.setCursor(Qt.CrossCursor)
+
+    def on_axes_leave(self, event):
+        """Clear highlighting when mouse leaves the chart area."""
+        self.clear_highlight()
+        from PySide6.QtCore import Qt
+        self.canvas.setCursor(Qt.ArrowCursor)
+
+    def highlight_path(self, line, mouse_x, mouse_y):
+        """Highlight a specific path and show tooltip."""
+        if self.highlighted_line == line:
+            return  # Already highlighted
+
+        # Reset previous highlighting
+        self.clear_highlight()
+
+        # Highlight the selected line
+        line.set_linewidth(2.5)
+        line.set_alpha(0.9)
+        line.set_zorder(100)  # Bring to front
+
+        # Dim other lines
+        for other_line in self.path_lines:
+            if other_line != line:
+                other_line.set_alpha(0.15)
+
+        self.highlighted_line = line
+
+        # Show hover dot
+        self.show_hover_dot(line, mouse_x, mouse_y)
+
+        # Show tooltip
+        self.show_tooltip(line, mouse_x, mouse_y)
+
+        self.canvas.draw_idle()
+
+    def clear_highlight(self):
+        """Clear all highlighting and tooltips."""
+        if self.highlighted_line:
+            # Reset highlighted line
+            self.highlighted_line.set_linewidth(self.highlighted_line.original_linewidth)
+            self.highlighted_line.set_alpha(self.highlighted_line.original_alpha)
+            self.highlighted_line.set_zorder(1)
+
+            # Reset all other lines
+            for line in self.path_lines:
+                line.set_alpha(line.original_alpha)
+
+            self.highlighted_line = None
+
+        # Remove hover dot
+        if self.hover_dot:
+            self.hover_dot.remove()
+            self.hover_dot = None
+
+        # Remove tooltip
+        if self.tooltip_annotation:
+            self.tooltip_annotation.remove()
+            self.tooltip_annotation = None
+
+        self.canvas.draw_idle()
+
+    def show_hover_dot(self, line, mouse_x, mouse_y):
+        """Show a dot indicating the hover position on the line."""
+        # Find the closest point on the line to mouse position
+        xdata, ydata = line.get_data()
+        distances = np.abs(xdata - mouse_x)
+        closest_idx = np.argmin(distances)
+
+        dot_x = xdata[closest_idx]
+        dot_y = ydata[closest_idx]
+
+        # Create hover dot
+        self.hover_dot = self.ax.plot(dot_x, dot_y, 'o', color='white',
+                                     markersize=6, markeredgecolor=line.original_color,
+                                     markeredgewidth=2, zorder=200)[0]
+
+    def show_tooltip(self, line, mouse_x, mouse_y):
+        """Show detailed information tooltip for the hovered path."""
+        # Get path data
+        path_index = line.path_index
+        path_data = line.path_data
+        time_grid = self.current_data[0]
+
+        # Find closest point
+        distances = np.abs(time_grid - mouse_x)
+        closest_idx = np.argmin(distances)
+
+        current_time = time_grid[closest_idx]
+        current_price = path_data[closest_idx]
+        initial_price = path_data[0]
+        final_price = path_data[-1]
+
+        # Calculate statistics
+        current_return = (current_price / initial_price - 1) * 100
+        total_return = (final_price / initial_price - 1) * 100
+        path_min = np.min(path_data)
+        path_max = np.max(path_data)
+
+        # Determine category
+        if total_return > 10:
+            category = "[+] Profit"
+        elif total_return < -10:
+            category = "[-] Loss"
+        else:
+            category = "[=] Neutral"
+
+        # Format tooltip text
+        tooltip_text = f"""Path #{path_index + 1}
+─────────────────
+Current: ${current_price:.2f}
+Time: {current_time:.2f} years
+Return: {current_return:+.1f}%
+
+Final: ${final_price:.2f}
+Total: {total_return:+.1f}%
+Range: ${path_min:.0f}-${path_max:.0f}
+{category}"""
+
+        # Smart tooltip positioning to avoid going off-screen
+        xlim = self.ax.get_xlim()
+        ylim = self.ax.get_ylim()
+
+        # Determine tooltip position based on mouse location
+        if mouse_x > (xlim[0] + xlim[1]) / 2:  # Right half
+            xytext = (-120, 20)  # Position to the left
+            ha = 'right'
+        else:  # Left half
+            xytext = (20, 20)  # Position to the right
+            ha = 'left'
+
+        if current_price > (ylim[0] + ylim[1]) / 2:  # Upper half
+            xytext = (xytext[0], -80)  # Position below
+            va = 'top'
+        else:  # Lower half
+            va = 'bottom'
+
+        # Create annotation
+        self.tooltip_annotation = self.ax.annotate(
+            tooltip_text,
+            xy=(mouse_x, current_price),
+            xytext=xytext,
+            textcoords='offset points',
+            bbox=dict(boxstyle='round,pad=0.8',
+                     facecolor=COLORS['surface'],
+                     edgecolor=COLORS['accent'],
+                     alpha=0.95),
+            fontsize=8,
+            color=COLORS['text'],
+            ha=ha,
+            va=va,
+            zorder=300
+        )
 
     def export_chart(self):
         """Export chart and/or data to files."""
