@@ -4,6 +4,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.animation import FuncAnimation
 import pandas as pd
+import time
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, QMessageBox
 from PySide6.QtCore import Qt, QTimer
 
@@ -76,8 +77,40 @@ class ChartWidget(QWidget):
         # Ensure labels are not clipped
         self.figure.subplots_adjust(left=0.1, bottom=0.15, right=0.95, top=0.9)
 
+    def cleanup_old_data(self):
+        """Clean up old data to prevent memory leaks."""
+        try:
+            # Clear animation if running
+            if self.animation:
+                self.animation.event_source.stop()
+                self.animation = None
+
+            # Clear cached line data
+            for line in self.path_lines:
+                if hasattr(line, '_cached_data'):
+                    delattr(line, '_cached_data')
+
+            # Clear line references
+            self.path_lines.clear()
+
+            # Clear highlights
+            self.highlighted_line = None
+            self.hover_dot = None
+            self.tooltip_annotation = None
+
+            # Force garbage collection for large datasets
+            if self.current_data and len(self.current_data[1]) > 1000:
+                import gc
+                gc.collect()
+
+        except Exception as e:
+            print(f"Cleanup error: {e}")
+
     def update_chart(self, time_grid, price_paths, stats):
         """Update the chart with new simulation data."""
+        # Clean up old data to prevent memory leaks
+        self.cleanup_old_data()
+
         self.current_data = (time_grid, price_paths)
         self.current_stats = stats
 
@@ -198,7 +231,8 @@ class ChartWidget(QWidget):
 
     def update_labels(self, stats):
         """Update chart labels and title."""
-        n_paths = len(stats['percentiles']['p50']) if 'percentiles' in stats else 0
+        # Get number of paths from the stored price data
+        n_paths = len(self.current_data[1]) if self.current_data is not None else 0
 
         self.ax.set_xlabel('Time (years)', color=COLORS['text'], fontsize=12)
         self.ax.set_ylabel('Price', color=COLORS['text'], fontsize=12)
@@ -328,48 +362,69 @@ class ChartWidget(QWidget):
 
                 self.ax.set_xlim(xlim[0] - dx, xlim[1] - dx)
                 self.ax.set_ylim(ylim[0] - dy, ylim[1] - dy)
-                self.canvas.draw()
+                self.canvas.draw_idle()
         else:
             # Handle hover interactions when not panning
             self.on_hover(event)
 
     def on_hover(self, event):
         """Handle mouse hover over the chart for interactive features."""
-        if event.inaxes != self.ax or not self.path_lines:
+        try:
+            if event.inaxes != self.ax or not self.path_lines:
+                return
+
+            # Throttle updates for performance
+            current_time = time.time()
+            if current_time - self.last_hover_time < self.hover_threshold:
+                return
+            self.last_hover_time = current_time
+        except Exception as e:
+            print(f"Hover error: {e}")
             return
 
-        # Throttle updates for performance
-        import time
-        current_time = time.time()
-        if current_time - self.last_hover_time < self.hover_threshold:
-            return
-        self.last_hover_time = current_time
+        try:
+            # Find closest line to mouse cursor - optimized with numpy
+            mouse_x, mouse_y = event.xdata, event.ydata
+            if mouse_x is None or mouse_y is None:
+                return
 
-        # Find closest line to mouse cursor
-        closest_line = None
-        min_distance = float('inf')
+            # Pre-filter lines to only check those near the mouse position
+            hover_range_x = (self.ax.get_xlim()[1] - self.ax.get_xlim()[0]) * 0.05
+            hover_range_y = (self.ax.get_ylim()[1] - self.ax.get_ylim()[0]) * 0.05
 
-        mouse_x, mouse_y = event.xdata, event.ydata
-        if mouse_x is None or mouse_y is None:
-            return
+            closest_line = None
+            min_distance = float('inf')
 
-        for line in self.path_lines:
-            # Get line data
-            xdata, ydata = line.get_data()
+            # Vectorized distance calculation
+            for line in self.path_lines:
+                # Get cached line data if available
+                if not hasattr(line, '_cached_data'):
+                    xdata, ydata = line.get_data()
+                    line._cached_data = (xdata, ydata)
+                else:
+                    xdata, ydata = line._cached_data
 
-            # Find closest point on this line
-            distances = ((xdata - mouse_x) ** 2 + (ydata - mouse_y) ** 2) ** 0.5
-            min_dist_on_line = np.min(distances)
+                # Quick bbox check for performance
+                if (mouse_x < np.min(xdata) - hover_range_x or mouse_x > np.max(xdata) + hover_range_x or
+                    mouse_y < np.min(ydata) - hover_range_y or mouse_y > np.max(ydata) + hover_range_y):
+                    continue
 
-            if min_dist_on_line < min_distance:
-                min_distance = min_dist_on_line
-                closest_line = line
+                # Vectorized distance calculation
+                distances_sq = (xdata - mouse_x) ** 2 + (ydata - mouse_y) ** 2
+                min_dist_on_line = np.sqrt(np.min(distances_sq))
 
-        # Only highlight if mouse is close enough to a line
-        hover_threshold = 0.05 * (self.ax.get_ylim()[1] - self.ax.get_ylim()[0])
-        if min_distance < hover_threshold:
-            self.highlight_path(closest_line, mouse_x, mouse_y)
-        else:
+                if min_dist_on_line < min_distance:
+                    min_distance = min_dist_on_line
+                    closest_line = line
+
+            # Only highlight if mouse is close enough to a line
+            hover_threshold = 0.05 * (self.ax.get_ylim()[1] - self.ax.get_ylim()[0])
+            if min_distance < hover_threshold:
+                self.highlight_path(closest_line, mouse_x, mouse_y)
+            else:
+                self.clear_highlight()
+        except Exception as e:
+            print(f"Hover detection error: {e}")
             self.clear_highlight()
 
     def on_axes_enter(self, event):
@@ -385,31 +440,35 @@ class ChartWidget(QWidget):
 
     def highlight_path(self, line, mouse_x, mouse_y):
         """Highlight a specific path and show tooltip."""
-        if self.highlighted_line == line:
-            return  # Already highlighted
+        try:
+            if self.highlighted_line == line:
+                return  # Already highlighted
 
-        # Reset previous highlighting
-        self.clear_highlight()
+            # Reset previous highlighting
+            self.clear_highlight()
 
-        # Highlight the selected line
-        line.set_linewidth(2.5)
-        line.set_alpha(0.9)
-        line.set_zorder(100)  # Bring to front
+            # Highlight the selected line
+            line.set_linewidth(2.5)
+            line.set_alpha(0.9)
+            line.set_zorder(100)  # Bring to front
 
-        # Dim other lines
-        for other_line in self.path_lines:
-            if other_line != line:
-                other_line.set_alpha(0.15)
+            # Dim other lines
+            for other_line in self.path_lines:
+                if other_line != line:
+                    other_line.set_alpha(0.15)
 
-        self.highlighted_line = line
+            self.highlighted_line = line
 
-        # Show hover dot
-        self.show_hover_dot(line, mouse_x, mouse_y)
+            # Show hover dot
+            self.show_hover_dot(line, mouse_x, mouse_y)
 
-        # Show tooltip
-        self.show_tooltip(line, mouse_x, mouse_y)
+            # Show tooltip
+            self.show_tooltip(line, mouse_x, mouse_y)
 
-        self.canvas.draw_idle()
+            self.canvas.draw_idle()
+        except Exception as e:
+            print(f"Highlight error: {e}")
+            self.clear_highlight()
 
     def clear_highlight(self):
         """Clear all highlighting and tooltips."""
@@ -531,21 +590,21 @@ Range: ${path_min:.0f}-${path_max:.0f}
 
     def export_chart(self):
         """Export chart and/or data to files."""
-        if self.current_data is None:
-            QMessageBox.warning(self, "Export Warning", "No data to export. Please run a simulation first.")
-            return
-
-        # File dialog to choose export type
-        dialog = QFileDialog()
-        file_types = "PNG Image (*.png);;PDF Document (*.pdf);;CSV Data (*.csv);;All Files (*.*)"
-        filename, selected_type = dialog.getSaveFileName(
-            self, "Export Chart/Data", "black_scholes_simulation", file_types
-        )
-
-        if not filename:
-            return
-
         try:
+            if self.current_data is None:
+                QMessageBox.warning(self, "Export Warning", "No data to export. Please run a simulation first.")
+                return
+
+            # File dialog to choose export type
+            dialog = QFileDialog()
+            file_types = "PNG Image (*.png);;PDF Document (*.pdf);;CSV Data (*.csv);;All Files (*.*)"
+            filename, selected_type = dialog.getSaveFileName(
+                self, "Export Chart/Data", "black_scholes_simulation", file_types
+            )
+
+            if not filename:
+                return
+
             if selected_type.startswith("PNG") or filename.endswith('.png'):
                 # Export chart as PNG
                 self.figure.savefig(filename, dpi=300, bbox_inches='tight',
@@ -562,6 +621,11 @@ Range: ${path_min:.0f}-${path_max:.0f}
                 # Export simulation data as CSV
                 time_grid, price_paths = self.current_data
 
+                # Limit data size for performance
+                if len(price_paths) > 1000:
+                    QMessageBox.warning(self, "Large Dataset", "Exporting first 1000 paths for performance.")
+                    price_paths = price_paths[:1000]
+
                 # Create DataFrame
                 df_data = {'Time': time_grid}
                 for i, path in enumerate(price_paths):
@@ -571,6 +635,10 @@ Range: ${path_min:.0f}-${path_max:.0f}
                 df.to_csv(filename, index=False)
                 QMessageBox.information(self, "Export Success", f"Data exported to {filename}")
 
+        except PermissionError:
+            QMessageBox.critical(self, "Export Error", "Permission denied. Please check file permissions.")
+        except FileNotFoundError:
+            QMessageBox.critical(self, "Export Error", "Invalid file path.")
         except Exception as e:
             QMessageBox.critical(self, "Export Error", f"Failed to export: {str(e)}")
 

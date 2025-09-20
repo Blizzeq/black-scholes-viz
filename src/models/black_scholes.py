@@ -21,6 +21,20 @@ class BlackScholesSimulator:
             T: Time horizon in years
             dt: Time step (default: 1 trading day = 1/252 years)
         """
+        # Validate input parameters
+        if S0 <= 0:
+            raise ValueError(f"Initial price S0 must be positive, got {S0}")
+        if sigma < 0:
+            raise ValueError(f"Volatility sigma must be non-negative, got {sigma}")
+        if T <= 0:
+            raise ValueError(f"Time horizon T must be positive, got {T}")
+        if T > 20:  # Reasonable upper limit
+            raise ValueError(f"Time horizon T too large (max 20 years), got {T}")
+        if dt <= 0:
+            raise ValueError(f"Time step dt must be positive, got {dt}")
+        if abs(mu) > 2.0:  # Sanity check for unrealistic returns
+            raise ValueError(f"Expected return mu seems unrealistic (|mu| > 200%), got {mu}")
+
         self.S0 = S0
         self.mu = mu
         self.sigma = sigma
@@ -71,10 +85,21 @@ class BlackScholesSimulator:
             Tuple of (time_grid, price_paths_matrix)
             price_paths_matrix shape: (n_paths, n_steps + 1)
         """
-        if parallel and n_paths > 10:
-            return self._simulate_paths_vectorized(n_paths)
-        else:
-            return self._simulate_paths_sequential(n_paths)
+        # Validate number of paths
+        if n_paths <= 0:
+            raise ValueError(f"Number of paths must be positive, got {n_paths}")
+        if n_paths > 10000:  # Performance limit
+            raise ValueError(f"Too many paths requested (max 10000), got {n_paths}")
+
+        try:
+            if parallel and n_paths > 10:
+                return self._simulate_paths_vectorized(n_paths)
+            else:
+                return self._simulate_paths_sequential(n_paths)
+        except MemoryError:
+            raise MemoryError(f"Not enough memory to simulate {n_paths} paths. Try reducing the number.")
+        except Exception as e:
+            raise RuntimeError(f"Simulation failed: {str(e)}")
 
     def _simulate_paths_vectorized(self, n_paths: int) -> Tuple[np.ndarray, np.ndarray]:
         """Vectorized simulation for better performance with many paths."""

@@ -1,6 +1,6 @@
 import sys
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-                               QSplitter, QLabel, QStatusBar, QProgressBar)
+                               QSplitter, QLabel, QStatusBar, QProgressBar, QMessageBox)
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont, QPalette, QColor
 
@@ -142,27 +142,41 @@ class MainWindow(QMainWindow):
             )
 
     def run_simulation(self, params):
-        """Run the Monte Carlo simulation."""
-        if self.simulation_worker and self.simulation_worker.isRunning():
-            return
+        """Run the Black-Scholes simulation."""
+        try:
+            if self.simulation_worker and self.simulation_worker.isRunning():
+                return
 
-        # Update simulator parameters
-        self.update_simulator_parameters(params)
+            # Validate parameters
+            if params['n_paths'] > 5000:
+                reply = QMessageBox.question(self, "Large Simulation",
+                    f"Simulating {params['n_paths']} paths may be slow. Continue?",
+                    QMessageBox.Yes | QMessageBox.No)
+                if reply == QMessageBox.No:
+                    return
 
-        # Show progress
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
-        self.status_bar.showMessage("Running simulation...")
+            # Update simulator parameters
+            self.update_simulator_parameters(params)
 
-        # Disable controls
-        self.control_panel.setEnabled(False)
+            # Show progress
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setValue(0)
+            self.status_bar.showMessage("Running simulation...")
 
-        # Start simulation in worker thread
-        self.simulation_worker = SimulationWorker(self.simulator, params['n_paths'])
-        self.simulation_worker.finished.connect(self.on_simulation_finished)
-        self.simulation_worker.progress.connect(self.progress_bar.setValue)
-        self.simulation_worker.error.connect(self.on_simulation_error)
-        self.simulation_worker.start()
+            # Disable controls
+            self.control_panel.setEnabled(False)
+
+            # Start simulation in worker thread
+            self.simulation_worker = SimulationWorker(self.simulator, params['n_paths'])
+            self.simulation_worker.finished.connect(self.on_simulation_finished)
+            self.simulation_worker.progress.connect(self.progress_bar.setValue)
+            self.simulation_worker.error.connect(self.on_simulation_error)
+            self.simulation_worker.start()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Simulation Error", f"Failed to start simulation: {str(e)}")
+            self.progress_bar.setVisible(False)
+            self.control_panel.setEnabled(True)
 
     def on_simulation_finished(self, simulation_data, stats):
         """Handle completed simulation."""
