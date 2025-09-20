@@ -1,141 +1,123 @@
 # Black-Scholes Price Movement Simulator
 
-Symulator losowych ruchów cen w modelu Black-Scholes z atrakcyjną wizualizacją "wachlarza" ścieżek cenowych.
+A simulation tool for visualizing stock price paths using the Black-Scholes model with an intuitive dark-themed interface.
 
-## 🎯 Funkcjonalności
+![Application Overview](screenshots/s1.png)
 
-- **Symulacja Monte Carlo** - Generowanie setek losowych ścieżek cenowych
-- **Model Black-Scholes** - Geometryczny ruch Browna z konfigurowalnymi parametrami
-- **Wizualizacja wachlarzowa** - Gradient kolorów od zielonego (zysk) do czerwonego (strata)
-- **Interaktywny wykres** - Zoom, pan, animacje
-- **Panel kontrolny** - Łatwa konfiguracja parametrów symulacji
-- **Statystyki** - VaR, Expected Shortfall, percentyle
-- **Ciemny motyw** - Profesjonalny i atrakcyjny interfejs
+## Features
 
-## 🚀 Instalacja i Uruchomienie
+🎯 **Monte Carlo Simulation** - Generate hundreds of random price paths
+📊 **Black-Scholes Model** - Geometric Brownian Motion with configurable parameters
+🌈 **Fan Chart Visualization** - Color-coded paths from green (profit) to red (loss)
+🖱️ **Interactive Charts** - Zoom, pan, hover tooltips, and animations
+⚙️ **Control Panel** - Easy parameter configuration with preset scenarios
+📈 **Statistics Dashboard** - VaR, Expected Shortfall, probability metrics
+🌙 **Professional Dark Theme** - Modern, eye-friendly interface
 
-### Wymagania
+## Quick Start
+
+### Requirements
 - Python 3.10+
-- pip
+- pip package manager
 
-### Kroki instalacji
+### Installation
 
-1. **Klonowanie/pobranie projektu**
+1. **Download the project**
 ```bash
-# Jeśli masz git
 git clone <repository-url>
 cd black-scholes-viz
-
-# Lub po prostu rozpakuj folder
 ```
 
-2. **Instalacja zależności**
+2. **Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Uruchomienie aplikacji**
+3. **Run the application**
 ```bash
 python main.py
 ```
 
-## 🎮 Instrukcja Użytkowania
+## Usage Guide
 
-### Panel Kontrolny (Lewa Strona)
+### Control Panel (Left Side)
+- **Scenarios**: Choose from predefined market scenarios
+- **Number of paths**: Set simulation count (10-1000)
+- **Time horizon**: Simulation period in years (0.1-5.0)
+- **Initial price (S₀)**: Starting stock price
+- **Expected return (μ)**: Annual return rate (-50% to +50%)
+- **Volatility (σ)**: Market volatility (5% to 100%)
 
-1. **Scenariusze** - Wybierz predefiniowany scenariusz rynkowy
-2. **Liczba ścieżek** - Ustaw ilość symulowanych ścieżek (10-1000)
-3. **Horyzont czasowy** - Okres symulacji w latach (0.1-5.0)
-4. **Cena początkowa (S₀)** - Startowa cena akcji
-5. **Oczekiwany zwrot (μ)** - Roczna stopa zwrotu (-50% do +50%)
-6. **Zmienność (σ)** - Volatility rynkowa (5% do 100%)
+### Chart Area (Center)
+- **Price paths**: Color-coded by performance (green=profit, red=loss)
+- **Percentile lines**: Show distribution quantiles (10%, 25%, 50%, 75%, 90%)
+- **Interactive features**: Mouse scroll to zoom, click-drag to pan
+- **Hover tooltips**: Path information on mouse hover
 
-### Wykres (Środek)
+![Interactive Chart Features](screenshots/s2.png)
 
-- **Ścieżki cenowe** - Kolorowane zgodnie z wynikiem (zielone=zysk, czerwone=strata)
-- **Linie percentyli** - Pokazują różne kwantyle rozkładu (10%, 25%, 50%, 75%, 90%)
-- **Interaktywność** - Scroll=zoom, LPM=przeciąganie
-- **Animacja** - Przycisk "Animuj" pokazuje płynne powstawanie ścieżek
+### Statistics Panel (Right Side)
+- **Final Price Statistics**: Mean, standard deviation, min/max values
+- **Returns & Risk Metrics**: Profit probability, VaR (95%), Expected Shortfall
+- **Visual Cards**: Color-coded positive/negative indicators
 
-### Panel Statystyk (Dół)
+### Action Buttons
+- **🎯 Run Simulation**: Execute Monte Carlo simulation
+- **🎬 Animation**: Animated path visualization
+- **🔄 Reset Zoom**: Return to default chart view
+- **📊 Toggle Percentiles**: Show/hide percentile lines
+- **📤 Export**: Save charts and data
 
-- **Prawdopodobieństwo zysku** - % ścieżek z dodatnim zwrotem
-- **VaR (95%)** - Value at Risk na poziomie 95%
-- **Expected Shortfall** - Średnia strata w najgorszych scenariuszach
+## Preset Scenarios
 
-## 📊 Predefiniowane Scenariusze
+| Scenario | Expected Return (μ) | Volatility (σ) | Description |
+|----------|-------------------|---------------|-------------|
+| **Stable Growth** | 8% | 15% | Conservative growth |
+| **High Volatility** | 5% | 40% | Unstable market |
+| **Bear Market** | -10% | 25% | Market decline |
+| **Bull Market** | 15% | 20% | Strong growth |
+| **Crisis** | -20% | 60% | Market crash |
+| **Low Vol** | 6% | 8% | Stable conditions |
 
-- **Stable Growth** - Stabilny wzrost (μ=8%, σ=15%)
-- **High Volatility** - Wysoka zmienność (μ=5%, σ=40%)
-- **Bear Market** - Bessza (μ=-10%, σ=25%)
-- **Bull Market** - Hossa (μ=15%, σ=20%)
-- **Crisis** - Kryzys (μ=-20%, σ=60%)
-- **Low Vol** - Niska zmienność (μ=6%, σ=8%)
+## Mathematical Model
 
-## 🧮 Model Matematyczny
-
-Aplikacja używa modelu Black-Scholes opartego na geometrycznym ruchu Browna:
+The application implements the Black-Scholes model based on Geometric Brownian Motion:
 
 ```
 dS(t) = μS(t)dt + σS(t)dW(t)
 ```
 
-Gdzie:
-- **S(t)** - cena akcji w czasie t
-- **μ** - drift (oczekiwana stopa zwrotu)
-- **σ** - zmienność (volatility)
-- **W(t)** - proces Wienera (Brownian motion)
+**Where:**
+- **S(t)** = Stock price at time t
+- **μ** = Drift (expected return rate)
+- **σ** = Volatility
+- **W(t)** = Wiener process (Brownian motion)
 
-Dyskretne rozwiązanie:
+**Discrete solution:**
 ```
 S(t) = S₀ * exp((μ - σ²/2)t + σ√dt * Z)
 ```
+where Z ~ N(0,1) is a standard normal random variable.
 
-gdzie Z ~ N(0,1) - rozkład normalny standardowy.
+## Technology Stack
 
-## 🎨 Technologie
+- **PySide6** - Modern Qt-based GUI framework
+- **NumPy** - High-performance numerical computations
+- **Matplotlib** - Professional chart visualization
+- **Python 3.10+** - Core programming language
 
-- **PySide6** - Nowoczesny framework GUI
-- **NumPy** - Obliczenia numeryczne i symulacje
-- **Matplotlib** - Wykresy i wizualizacje
-- **SciPy** - Funkcje statystyczne
+## Performance Features
 
-## 📁 Struktura Projektu
+- **Vectorized Calculations** - Efficient NumPy operations for large simulations
+- **Memory Management** - Automatic cleanup of old data
+- **Background Processing** - Non-blocking simulations using QThread
+- **Optimized Rendering** - Smart chart updates and hover detection
+
+## Requirements.txt
 
 ```
-black-scholes-viz/
-├── main.py                 # Główny plik aplikacji
-├── requirements.txt        # Zależności
-├── README.md              # Ten plik
-├── plan.txt               # Szczegółowy plan projektu
-├── src/
-│   ├── models/
-│   │   └── black_scholes.py   # Model matematyczny
-│   ├── ui/
-│   │   ├── main_window.py     # Główne okno
-│   │   ├── control_panel.py   # Panel kontrolny
-│   │   └── chart_widget.py    # Widget wykresu
-│   └── utils/
-│       └── config.py          # Konfiguracja
-└── resources/
-    └── styles.qss         # Arkusze stylów
+PySide6>=6.0.0
+numpy>=1.20.0
+matplotlib>=3.5.0
+pandas>=1.3.0
 ```
-
-## 🔧 Możliwe Rozszerzenia
-
-- Export wykresów do PNG/SVG
-- Export danych do CSV
-- Porównanie z rzeczywistymi danymi historycznymi
-- Wycena opcji europejskich/amerykańskich
-- Analiza portfela
-- Tryb real-time z danymi giełdowymi
-
-## 📝 Licencja
-
-Ten projekt został stworzony w celach edukacyjnych i demonstracyjnych.
-
----
-
-**Autor**: Symulator Black-Scholes
-**Wersja**: 1.0.0
-**Data**: Wrzesień 2024
