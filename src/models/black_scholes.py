@@ -11,16 +11,6 @@ class BlackScholesSimulator:
     """
 
     def __init__(self, S0: float, mu: float, sigma: float, T: float, dt: float = 1/252):
-        """
-        Initialize the Black-Scholes simulator.
-
-        Args:
-            S0: Initial stock price
-            mu: Expected return (drift)
-            sigma: Volatility
-            T: Time horizon in years
-            dt: Time step (default: 1 trading day = 1/252 years)
-        """
         # Validate input parameters
         if S0 <= 0:
             raise ValueError(f"Initial price S0 must be positive, got {S0}")
@@ -44,15 +34,6 @@ class BlackScholesSimulator:
         self.time_grid = np.linspace(0, T, self.n_steps + 1)
 
     def simulate_path(self, random_seed: int = None) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Simulate a single price path.
-
-        Args:
-            random_seed: Optional random seed for reproducibility
-
-        Returns:
-            Tuple of (time_grid, price_path)
-        """
         if random_seed is not None:
             np.random.seed(random_seed)
 
@@ -74,17 +55,6 @@ class BlackScholesSimulator:
         return self.time_grid, price_path
 
     def simulate_multiple_paths(self, n_paths: int, parallel: bool = True) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Simulate multiple price paths efficiently.
-
-        Args:
-            n_paths: Number of paths to simulate
-            parallel: Whether to use vectorized computation (recommended for large n_paths)
-
-        Returns:
-            Tuple of (time_grid, price_paths_matrix)
-            price_paths_matrix shape: (n_paths, n_steps + 1)
-        """
         # Validate number of paths
         if n_paths <= 0:
             raise ValueError(f"Number of paths must be positive, got {n_paths}")
@@ -102,7 +72,6 @@ class BlackScholesSimulator:
             raise RuntimeError(f"Simulation failed: {str(e)}")
 
     def _simulate_paths_vectorized(self, n_paths: int) -> Tuple[np.ndarray, np.ndarray]:
-        """Vectorized simulation for better performance with many paths."""
         # Generate all random numbers at once
         dW = np.random.normal(0, np.sqrt(self.dt), (n_paths, self.n_steps))
 
@@ -121,7 +90,6 @@ class BlackScholesSimulator:
         return self.time_grid, price_paths
 
     def _simulate_paths_sequential(self, n_paths: int) -> Tuple[np.ndarray, np.ndarray]:
-        """Sequential simulation for smaller number of paths."""
         price_paths = np.zeros((n_paths, self.n_steps + 1))
 
         for i in range(n_paths):
@@ -131,15 +99,6 @@ class BlackScholesSimulator:
         return self.time_grid, price_paths
 
     def get_statistics(self, price_paths: np.ndarray) -> dict:
-        """
-        Calculate statistics for the simulated paths.
-
-        Args:
-            price_paths: Array of shape (n_paths, n_steps + 1)
-
-        Returns:
-            Dictionary with various statistics
-        """
         final_prices = price_paths[:, -1]
         returns = (final_prices / self.S0 - 1) * 100
 
@@ -176,7 +135,6 @@ class BlackScholesSimulator:
 
     def update_parameters(self, S0: float = None, mu: float = None,
                          sigma: float = None, T: float = None):
-        """Update simulation parameters."""
         if S0 is not None:
             self.S0 = S0
         if mu is not None:
@@ -190,7 +148,6 @@ class BlackScholesSimulator:
 
 
 def create_scenario_presets() -> dict:
-    """Create predefined scenarios for quick testing."""
     return {
         "stable_growth": {"mu": 0.08, "sigma": 0.15},
         "high_volatility": {"mu": 0.05, "sigma": 0.40},

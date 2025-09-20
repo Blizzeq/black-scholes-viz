@@ -12,7 +12,6 @@ from ..utils.config import COLORS, CHART_CONFIG, PERCENTILES, PATH_COLORS
 
 
 class ChartWidget(QWidget):
-    """Widget containing the matplotlib chart for price path visualization."""
 
     def __init__(self):
         super().__init__()

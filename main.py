@@ -18,7 +18,6 @@ from src.utils.config import APP_NAME, COLORS
 
 
 def setup_application():
-    """Setup the QApplication with proper styling."""
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion("1.0.0")
@@ -51,7 +50,6 @@ def setup_application():
 
 
 def main():
-    """Main application entry point."""
     try:
         # Create and setup application
         app = setup_application()

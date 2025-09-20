@@ -7,7 +7,6 @@ from ..utils.config import COLORS
 
 
 class StatCard(QFrame):
-    """Individual statistic card widget."""
 
     def __init__(self, title, value="", unit="", color=None):
         super().__init__()
@@ -91,7 +90,6 @@ class StatCard(QFrame):
 
 
 class ProgressCard(QFrame):
-    """Card with progress bar for percentage values."""
 
     def __init__(self, title, value=0, max_value=100):
         super().__init__()
@@ -168,7 +166,6 @@ class ProgressCard(QFrame):
 
 
 class StatsPanel(QWidget):
-    """Enhanced statistics panel with cards and visual indicators."""
 
     def __init__(self):
         super().__init__()

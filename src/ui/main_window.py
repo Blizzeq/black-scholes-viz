@@ -12,7 +12,6 @@ from ..models.black_scholes import BlackScholesSimulator
 
 
 class SimulationWorker(QThread):
-    """Worker thread for running simulations without blocking the UI."""
 
     finished = Signal(object, object)  # time_grid, price_paths
     progress = Signal(int)
@@ -39,7 +38,6 @@ class SimulationWorker(QThread):
 
 
 class MainWindow(QMainWindow):
-    """Main application window."""
 
     def __init__(self):
         super().__init__()

@@ -9,7 +9,6 @@ from ..models.black_scholes import create_scenario_presets
 
 
 class ControlPanel(QWidget):
-    """Control panel widget with simulation parameters."""
 
     simulate_clicked = Signal(dict)
     parameters_changed = Signal(dict)
