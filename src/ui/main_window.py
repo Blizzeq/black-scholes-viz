@@ -7,6 +7,7 @@ from PySide6.QtGui import QFont, QPalette, QColor
 from ..utils.config import APP_NAME, COLORS
 from .control_panel import ControlPanel
 from .chart_widget import ChartWidget
+from .stats_panel import StatsPanel
 from ..models.black_scholes import BlackScholesSimulator
 
 
@@ -72,34 +73,27 @@ class MainWindow(QMainWindow):
         self.control_panel.setMinimumWidth(250)
         splitter.addWidget(self.control_panel)
 
-        # Right side layout for chart and stats
-        right_widget = QWidget()
-        right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(0, 0, 0, 0)
+        # Create nested splitter for chart and stats
+        chart_stats_splitter = QSplitter(Qt.Horizontal)
 
-        # Chart widget
+        # Chart widget (main area)
         self.chart_widget = ChartWidget()
-        right_layout.addWidget(self.chart_widget, stretch=3)
+        chart_stats_splitter.addWidget(self.chart_widget)
 
-        # Statistics panel (placeholder for now)
-        self.stats_panel = QLabel("Statistics will appear here after running simulation")
-        self.stats_panel.setAlignment(Qt.AlignTop)
-        self.stats_panel.setStyleSheet(f"""
-            QLabel {{
-                background-color: {COLORS['surface']};
-                color: {COLORS['text']};
-                padding: 15px;
-                border-radius: 8px;
-                font-size: 12px;
-            }}
-        """)
-        self.stats_panel.setMaximumHeight(200)
-        right_layout.addWidget(self.stats_panel, stretch=1)
+        # Statistics panel (sidebar)
+        self.stats_panel = StatsPanel()
+        self.stats_panel.set_placeholder_text()
+        self.stats_panel.setMaximumWidth(350)
+        self.stats_panel.setMinimumWidth(280)
+        chart_stats_splitter.addWidget(self.stats_panel)
 
-        splitter.addWidget(right_widget)
+        # Set proportions: chart gets most space, stats gets sidebar
+        chart_stats_splitter.setSizes([1000, 300])
 
-        # Set splitter proportions
-        splitter.setSizes([300, 1100])
+        splitter.addWidget(chart_stats_splitter)
+
+        # Set splitter proportions (control panel : chart+stats)
+        splitter.setSizes([280, 1120])
 
         # Status bar
         self.status_bar = QStatusBar()
@@ -201,20 +195,7 @@ class MainWindow(QMainWindow):
 
     def update_stats_panel(self, stats):
         """Update the statistics panel with simulation results."""
-        stats_text = f"""
-        <h3>Simulation Statistics</h3>
-        <p><b>Final Price:</b></p>
-        <p>• Mean: {stats['final_price_mean']:.2f}</p>
-        <p>• Std Dev: {stats['final_price_std']:.2f}</p>
-        <p>• Min: {stats['final_price_min']:.2f}</p>
-        <p>• Max: {stats['final_price_max']:.2f}</p>
-
-        <p><b>Returns:</b></p>
-        <p>• Profit Probability: {stats['probability_profit']:.1f}%</p>
-        <p>• VaR (95%): {stats['var_95']:.1f}%</p>
-        <p>• Expected Shortfall: {stats['expected_shortfall']:.1f}%</p>
-        """
-        self.stats_panel.setText(stats_text)
+        self.stats_panel.update_statistics(stats)
 
     def apply_dark_theme(self):
         """Apply dark theme to the application."""
